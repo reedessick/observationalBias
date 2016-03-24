@@ -22,7 +22,7 @@ from laldetchar.idq import event
 
 import subprocess as sp
 
-#import pickle
+import pickle
 
 import matplotlib
 matplotlib.use('Agg')
@@ -94,8 +94,9 @@ file_obj.close()
 ### will have to do this by hand (unfortunately)
 
 ### set up bins
+day = 86400.
 Nbins = 60*12 ### one bin per minute
-bins = np.linspace(0, 86400, Nbins+1)
+bins = np.linspace(0, day, Nbins+1)
 counts = np.zeros((Nbins,), dtype=float)
 binDur = bins[1]-bins[0]
 
@@ -108,7 +109,7 @@ if opts.verbose:
 for s, e in segs:
     if opts.verbose:
         print "processing : %d - %d"%(s, e)
-    relative_start = (s - tref)%(86400) ### where the segment starts in the day
+    relative_start = (s - tref)%(day) ### where the segment starts in the day
     dur = e - s
 
     for i in xrange(Nbins): ### find the bin we start in
@@ -133,9 +134,17 @@ for s, e in segs:
             dur -= binDur
         i = (i+1)%(Nbins)
 
+filename = "%s/UptimeHist-%s-%d-%d.pkl"%(opts.output_dir, opts.flag.replace(":","_"), start, end-start)
+if opts.verbose:
+    print filename
+file_obj = open(filename, "w")
+pickle.dump(bins, file_obj)
+pickle.dump(counts, file_obj)
+file_obj.close()
+
 counts /= np.sum(counts) ### compute fractional occupation
 
-counts /= binDur/86400. ### normalize by the expected amount
+counts /= binDur/day ### normalize by the expected amount
 
 ### plot histogram
 if opts.verbose:
@@ -153,6 +162,8 @@ for i in xrange(Nbins):
 ax.fill_between( x, y, Y )
 
 ax.plot([0, 86400], [1, 1], 'k:', alpha=0.5)
+
+ax.set_title('%d sec joint livetime out of %d sec'%(event.livetime(segs), end-start))
 
 ax.set_xlabel('hours relative to Sept 11 00:00:00 GMT 2015')
 ax.set_ylabel('fraction of joint livetime / uniform distribution')

@@ -33,11 +33,15 @@ parser.add_option("-f", "--min-freq", default=32.0, type="float", help="the mini
 parser.add_option("-F", "--max-freq", default=512.0, type="float", help="the maximum frequency at which we evaluate the PSD")
 parser.add_option("-d", "--dfreq", default=10.0, type="float", help="the frequency spacing for averaging the PSDs")
 
+parser.add_option("", "--noDistWeight", default=False, action="store_true", help="turn off weighting by distance")
+
 parser.add_option("-o", "--output-dir", default=".", type="string")
 parser.add_option("-t", "--tag", default="", type="string")
 
 parser.add_option("", "--saveIndividualMaps", default=False, action="store_true")
 parser.add_option("", "--alsoEarthFixed", default=False, action="store_true")
+
+parser.add_option("", "--PSD-cache", default=None, type="string", help="if supplied, we read filenames out of the cache in addition to the command line arguments supplied")
 
 opts, args = parser.parse_args()
 
@@ -46,6 +50,14 @@ if opts.tag:
 
 if not os.path.exists(opts.output_dir):
     os.makedirs(opts.output_dir)
+
+#-------------------------------------------------
+
+### load from cache
+if opts.PSD_cache:
+    file_obj = open(opts.PSD_cache, "r")
+    args += [filename.strip() for filename in file_obj.readlines()]
+    file_obj.close()
 
 #-------------------------------------------------
 
@@ -123,10 +135,13 @@ for ind, seg in enumerate(segs):
         hp.write_map(outfits, trace)
 
     ### compute distance weight
-    invDsqr = 0.0
-    for detector in detectors.values():
-        invDsqr += np.sum( freqWeights / detector.psd.interpolate( smpl_freqs ) )
-    distWeight = invDsqr**(-1.5) ### weight appropriately for p(d) ~ D^2 dD
+    if opts.noDistWeight:
+        distWeight = 1.0
+    else:
+        invDsqr = 0.0
+        for detector in detectors.values():
+            invDsqr += np.sum( freqWeights / detector.psd.interpolate( smpl_freqs ) )
+        distWeight = invDsqr**(-1.5) ### weight appropriately for p(d) ~ D^2 dD
 
     ### add to the stack
     tracemap += distWeight * trace
@@ -154,7 +169,10 @@ for ind, seg in enumerate(segs):
 tracemap /= np.sum(tracemap)
 
 ### write output
-outfits = "%s/celestial-freqDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
+if opts.noDistWeight:
+    outfits = "%s/celestial-freqNoDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
+else:
+    outfits = "%s/celestial-freqDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
 if opts.verbose:
     print "writing : %s"%(outfits)
 hp.write_map(outfits, tracemap)
@@ -162,7 +180,10 @@ hp.write_map(outfits, tracemap)
 if opts.alsoEarthFixed:
     eftracemap /= np.sum(eftracemap)
 
-    outfits = "%s/earthFixed-freqDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
+    if opts.noDistWeight:
+        outfits = "%s/earthFixed-freqNoDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
+    else:
+        outfits = "%s/earthFixed-freqDistWeightTrace%s-%d-%d.fits"%(opts.output_dir, opts.tag, segs[0][0], segs[-1][1]-segs[0][0])
     if opts.verbose:
         print "writing : %s"%(outfits)
     hp.write_map(outfits, tracemap)
